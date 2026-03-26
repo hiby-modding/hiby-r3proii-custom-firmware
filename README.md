@@ -2,7 +2,11 @@
 
 This project adds Arabic text rendering support to the HiBy R3 Pro II digital audio player, and documents the proprietary OTA firmware format for the benefit of the modding community.
 
-## What This Does
+## This project is part of the hiby-modding organization. Also see:
+
+[hiby_os_crack](https://github.com/hiby-modding/hiby_os_crack) by Tartarus6 — complementary firmware modding project with clean unpack/repack scripts, QEMU emulation setup, Windows support, and SOC hardware documentation.
+
+## What This Project Does
 
 By default the HiBy R3 Pro II cannot render Arabic script — Arabic text in music file names, folder names, and metadata tags shows as boxes with X's. This firmware modification adds 252 Arabic Unicode glyphs (U+0600–U+06FF) from the open-source Noto Naskh Arabic font into the device's Thai supplementary font file, enabling correct Arabic text rendering throughout the OS.
 
@@ -116,10 +120,6 @@ Contributions are welcome. Areas where help would be valuable:
 - Investigating kernel source availability (check github.com/hiby-music)
 - Adding support for other scripts (Persian, Urdu, Hebrew, etc.)
 - Improving the build process
-
-## This project is part of the hiby-modding organization. Also see:
-
-[hiby_os_crack](https://github.com/hiby-modding/hiby_os_crack) by Tartarus6 — complementary firmware modding project with clean unpack/repack scripts, QEMU emulation setup, Windows support, and SOC hardware documentation.
 
 ## Acknowledgements
 
