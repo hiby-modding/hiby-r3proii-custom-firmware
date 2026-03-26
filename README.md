@@ -117,6 +117,10 @@ Contributions are welcome. Areas where help would be valuable:
 - Adding support for other scripts (Persian, Urdu, Hebrew, etc.)
 - Improving the build process
 
+## This project is part of the hiby-modding organization. Also see:
+
+[hiby_os_crack](https://github.com/hiby-modding/hiby_os_crack) by Tartarus6 — complementary firmware modding project with clean unpack/repack scripts, QEMU emulation setup, Windows support, and SOC hardware documentation.
+
 ## Acknowledgements
 
 - Noto Naskh Arabic font by Google (OFL licensed)
