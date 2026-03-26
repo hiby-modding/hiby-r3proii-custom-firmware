@@ -117,3 +117,4 @@ Contributions are welcome. Areas where help would be valuable:
 - Noto Naskh Arabic font by Google (OFL licensed)
 - HiBy Music for making a great device
 - The head-fi.org community for DAP enthusiasm
+- The Reddit r/Hiby community
