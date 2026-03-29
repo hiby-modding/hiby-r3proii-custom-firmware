@@ -11,8 +11,8 @@ This project is part of the [hiby-modding](https://github.com/hiby-modding) orga
 Provides custom firmware builds and tools for modifying HiBy OS on supported devices. Modifications are built on top of the stock firmware and distributed as ready-to-flash `.upt` files.
 
 **Current modifications in v1.1:**
-- Extended Unicode font support — adds rendering for scripts not included in the stock firmware. Previously unsupported scripts displayed as boxes with X's.
 - Alphabetical sorting fix — Albums and Artists starting with "The" are now sorted by the following word rather than under "T"
+- Extended Unicode font support — adds rendering for scripts not included in the stock firmware. Previously unsupported scripts displayed as boxes with X's.
 
 **Known Limitations:**
 - Added Unicode scripts display left-to-right regardless of the script's natural reading direction — the HiBy OS text renderer does not support bidirectional text
