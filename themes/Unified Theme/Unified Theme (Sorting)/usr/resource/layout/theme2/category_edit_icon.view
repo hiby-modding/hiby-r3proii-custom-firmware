@@ -1,0 +1,28 @@
+{
+	"viewgroup":{
+		"imageview":{
+			"name":"iv_category_edit",
+			"x":0,
+			"y":0,
+			"imageview":true
+		},
+		"name":"vg_edit_down",
+		"type":"hgl_view",
+		"x":0,
+		"y":0,
+		"w":1,
+		"h":36,
+		"hglview_x":359,
+		"hglview_y":56,
+		"hglview_w":1,
+		"hglview_h":36,
+		"zorder":2,
+		"content_x":0,
+		"content_y":0,
+		"content_w":1,
+		"content_h":36,
+		"flag":"static",
+		"viewgroup":true,
+		"add_layout":true
+	}
+}

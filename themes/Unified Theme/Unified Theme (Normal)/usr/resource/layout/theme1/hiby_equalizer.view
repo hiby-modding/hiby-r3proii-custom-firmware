@@ -1,0 +1,30 @@
+{
+	"viewgroup":{
+		"viewgroup":{
+			"name":"equalizer_vg_top",
+			"type":"lg_view",
+			"x":0,
+			"y":0,
+			"w":480,
+			"h":1,
+			"color":"0x1061f7",
+			"viewgroup":true
+		},
+		"name":"vg_equalizer_hiby",
+		"type":"hgl_view",
+		"x":0,
+		"y":0,
+		"w":720,
+		"h":700,
+		"hglview_x":0,
+		"hglview_y":112,
+		"hglview_w":850,
+		"hglview_h":608,
+		"zorder":480,
+		"flag":"h_scroll",
+		"color":"0xe4f5fe",
+		"focus_color":"0x32526c",
+		"viewgroup":true,
+		"add_layout":true
+	}
+}

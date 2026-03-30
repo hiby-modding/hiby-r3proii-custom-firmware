@@ -1,0 +1,14 @@
+{
+    "layout":{
+		"name":"layout_main",
+		"hgl_view":
+		[
+			{"hglview":"category_edit_icon.view"}
+		],
+		"x":0,
+		"y":0,
+		"w":480,
+		"h":720,
+		"layout":true
+	}
+}

@@ -1,0 +1,26 @@
+{
+	"viewgroup":{
+		"imageview":{
+                "name":"test_qrcode_iv_qrcode",
+                "x":0,
+                "y":0,
+				"w":480,
+				"h":720,
+                "imageview":true
+			},
+		"name":"vg_dialog_test_qrcode",
+		"type":"hgl_view",
+		"x":0,
+		"y":0,
+		"w":480,
+		"h":720,
+		"hglview_x":0,
+		"hglview_y":0,
+		"hglview_w":480,
+		"hglview_h":720,
+		"flag":"dirty",
+		"color":"0xfffffe",
+		"viewgroup":true,
+		"add_layout":true
+	}
+}

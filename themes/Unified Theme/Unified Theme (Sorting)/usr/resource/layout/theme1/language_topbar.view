@@ -1,0 +1,31 @@
+{
+	"viewgroup":{
+		"textview":{
+				"name":"language_tv_title",
+				"size":28,
+				"color":"0x32526c",
+				"type":"static|center|top",
+				"ini":"sys_set.ini",
+				"text":"language",
+				"x":0,
+				"y":26,
+				"w":480,
+				"h":80,
+				"textview":true
+			},
+		"name":"vg_language_topbar",
+		"type":"hgl_view",
+		"x":0,
+		"y":0,
+		"w":480,
+		"h":80,
+		"hglview_x":0,
+		"hglview_y":0,
+		"hglview_w":480,
+		"hglview_h":80,
+		"color":"0xe4f5fe",
+		"zorder":904,
+		"viewgroup":true,
+		"add_layout":true
+	}
+}

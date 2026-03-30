@@ -1,0 +1,18 @@
+{
+	"viewgroup":{
+		"name":"vg_dialog_keyboard",
+		"type":"hgl_view",
+		"x":0,
+		"y":0,
+		"w":480,
+		"h":222,
+		"hglview_x":0,
+		"hglview_y":258,
+		"hglview_w":480,
+		"hglview_h":222,
+		"flag":"dirty",
+		"img_path":"keyboard\\bg.png",
+		"viewgroup":true,
+		"add_layout":true
+	}
+}
