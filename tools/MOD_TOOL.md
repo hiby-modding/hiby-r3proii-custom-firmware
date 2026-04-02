@@ -45,21 +45,24 @@ Before running the script, make sure your working directory is organized exactly
 ```text
 Main folder/
 │
-├── Tools/				      # This is where the tool is located 
+├── Tools/				      
+│   ├── universal_mod_tool.sh     # This is the tool to modify the firmware.
+│   ├── merge_arabic_font.py
+│   └── build_upt.sh
 │
-├── Firmware/                 # This folder contains the modifiable base Firmwares
+├── Firmware/                     # This folder contains the modifiable base Firmwares
 │   ├── r3proii.upt 
 │   └── r3proii-arabic.upt
 │
-├── Binaries/                 # Put your custom patched binaries here
+├── Binaries/                     # Put your custom patched binaries here
 │   ├── Sorting Fix/
-│   │   └── hiby_player       # The executable file MUST be named 'hiby_player'
+│   │   └── hiby_player           # The executable file MUST be named 'hiby_player'
 │   └── Another_Mod/
 │       └── hiby_player
 │
-└── Themes/                   # Put your custom themes here
+└── Themes/                       # Put your custom themes here
     ├── Theme 1/
-    │   └── ...               # (Folders and UI files go here)
+    │   └── ...                   # (Folders and UI files go here)
     └── Theme 2/
     └── ...
 
