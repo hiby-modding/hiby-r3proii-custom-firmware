@@ -34,6 +34,13 @@
 			"y":636,
 			"imageview":true
 		},
+		"imageview":{
+			"name":"screensavers_iv_bg",
+			"img_path":"screensavers\\text_bg_2.png",
+			"x":0,
+			"y":450,
+			"imageview":true
+		},
 		"textview":{
 				"name":"screensavers_tv_music_name",
 				"size":30,
