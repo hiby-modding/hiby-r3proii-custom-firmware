@@ -1,14 +1,13 @@
 {
 	"viewgroup":{
-		"viewgroup":{
-			"name":"screensavers_vg_timer",
-			"type":"hgl_view",
+		"imageview":{
+			"name":"screensavers_iv_bg",
+			"img_path":"screensavers\\text_bg_2.png",
 			"x":0,
-			"y":480,
+			"y":460,
 			"w":480,
-			"h":240,
-			"color":"0x50000000",
-			"viewgroup":true
+			"h":260,
+			"imageview":true
 		},
 		"numview":{
 				"name":"screensavers_nv_time",
@@ -32,13 +31,6 @@
 			"img_path":"screensavers\\pm.png",
 			"x":236,
 			"y":636,
-			"imageview":true
-		},
-		"imageview":{
-			"name":"screensavers_iv_bg",
-			"img_path":"screensavers\\text_bg_2.png",
-			"x":0,
-			"y":450,
 			"imageview":true
 		},
 		"textview":{
