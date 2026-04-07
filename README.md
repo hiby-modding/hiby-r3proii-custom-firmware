@@ -137,6 +137,8 @@ See [docs/FIRMWARE_FORMAT.md](docs/FIRMWARE_FORMAT.md) for complete documentatio
 - Font system
 - Hardware details
 
+See [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) for a guide on capturing screenshots from the device via ADB, including framebuffer details, known limitations with IPU-rendered content, and a quick reference script.
+
 This documentation was produced entirely through reverse engineering and may be useful for anyone wanting to build further modifications.
 
 ## Changelog
