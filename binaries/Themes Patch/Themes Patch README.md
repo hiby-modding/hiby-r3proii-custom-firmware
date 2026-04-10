@@ -112,4 +112,5 @@ Total code cave usage: 388 bytes out of 16,364 available. File size is unchanged
 - **`FUN_004822c0` (NAND writer):** formats `theme:%d` with any number — no change needed.
 - **`FUN_00428d60` and related litegui path builders:** use the pointer table at `0x7ed854` which already contains entries for `theme2\\` through `theme6\\` — no change needed.
 - **Layout path builders (`FUN_0042b740`, `FUN_004bac20`, `FUN_0054cfc0`):** all use `sprintf("theme%d", index+1)` — no change needed.
->Note: the boot logo can be changed by editing the **S11jpeg_display_shell** file inside `/etc/init.d`
+>Note: The boot logo can be changed by editing the **S11jpeg_display_shell** file inside `/etc/init.d`
+How it works is pretty self explanatory, it reads the theme ID stored in NAND and then loads the corresponding jpeg file inside the `etc` folder.
