@@ -12,7 +12,7 @@ When the user selects a theme, the firmware stores a 0-based index in a global s
 - **layout files** are built with `sprintf("z:\\layout\\theme%d\\...", index + 1)`, producing paths like `z:\layout\theme3\main.json`.
 - **The theme ID is persisted** to NAND flash (`/dev/mtd5`) as the string `theme:N` (1-based), and read back at boot by parsing the digit.
 
-None of these mechanisms have a limit of 2 — they already work for any theme number up to at least 6. The setter function (`case 0x4` in the settings switch) stores the index with no bounds check. The NAND writer (`FUN_004822c0`) formats `theme:%d` with `index + 1` and accepts any value. The NAND reader (`FUN_00469b00`) parses digits 0–9.
+None of these mechanisms have a limit of 2, they already work for any theme number up to at least 6. The setter function (`case 0x4` in the settings switch) stores the index with no bounds check. The NAND writer (`FUN_004822c0`) formats `theme:%d` with `index + 1` and accepts any value. The NAND reader (`FUN_00469b00`) parses digits 0–9.
 
 ### Translation strings
 
@@ -39,7 +39,7 @@ This function populates the theme selection listview in the Settings dialog. It 
 
 **Patched behavior:** iterates over 4 key pointers (`light_color`, `dark_color`, `theme_3`, `theme_4` — or `theme_1`, `theme_2`, `theme_3`, `theme_4` when `dark_theme_enable=0`) and returns `4`.
 
-Since the rewritten function needs more instructions than the original (62 vs 56 — extra stack slots for two more key pointers, plus the code to load and store them), it doesn't fit in-place. The patch uses a **code cave** at VA `0x41c0b4` (a 16 KB zero region in the text segment) and replaces the first instruction of the original function with a `j 0x41c0b4` trampoline.
+Since the rewritten function needs more instructions than the original (62 vs 56 — extra stack slots for two more key pointers, plus the code to load and store them), it doesn't fit in-place. The patch uses a **code cave** at VA `0x41c0b8` (in a 16 KB zero region in the text segment, starting after the database manager patch which ends at `0x41c0b4`) and replaces the first instruction of the original function with a `j 0x41c0b8` trampoline.
 
 The rewritten function is a faithful reproduction of the original with these differences:
 
@@ -58,7 +58,7 @@ This code is inside a large settings handler function. It reads the **currently 
 - Index 1 → reads `dark_color` (or `theme_2`) from `sys_set.ini`
 - Any other index → exits without writing a subtitle (subtitle stays empty)
 
-**Patched behavior:** the `bne` instruction at `0x4e122c` (which rejected indices ≥ 2) is replaced with a `j 0x41c1b0` to a code cave that handles all 4 indices:
+**Patched behavior:** the `bne` instruction at `0x4e122c` (which rejected indices ≥ 2) is replaced with a `j 0x41c1b4` to a code cave that handles all 4 indices:
 - Index 0 → `light_color` / `theme_1` (handled by original `beqz` at `0x4e1224`, unchanged)
 - Index 1 → `dark_color` / `theme_2` (handled in cave)
 - Index 2 → `theme_3` (handled in cave)
@@ -71,39 +71,55 @@ Each handler calls `FUN_00427820("sys_set.ini", key, buffer, 0x7f)` to read the 
 
 | Location | Original | Patched | Purpose |
 |---|---|---|---|
-| `0x4e6d80` | `addiu sp, sp, -0xac0` | `j 0x41c0b4` | Trampoline to list cave |
+| `0x4e6d80` | `addiu sp, sp, -0xac0` | `j 0x41c0b8` | Trampoline to list cave |
 | `0x4e6d84` | `lui v0, 0x82` | `nop` | Trampoline delay slot |
-| `0x41c0b4`–`0x41c1a8` | zeros | 62 MIPS instructions | Rewritten list function (Patch B) |
-| `0x4e122c` | `bne s1, v1, 0x4e101c` | `j 0x41c1b0` | Redirect to subtitle cave |
+| `0x41c0b8`–`0x41c1ac` | zeros | 62 MIPS instructions | Rewritten list function (Patch B) |
+| `0x4e122c` | `bne s1, v1, 0x4e101c` | `j 0x41c1b4` | Redirect to subtitle cave |
 | `0x4e1230` | `lui a0, 0x7f` | `nop` | Delay slot cleanup |
-| `0x41c1b0`–`0x41c234` | zeros | 34 MIPS instructions | Subtitle handler (Patch C) |
+| `0x41c1b4`–`0x41c238` | zeros | 34 MIPS instructions | Subtitle handler (Patch C) |
 | `0x7f2d4c` | zeros | `theme_3\0` | New translation key (Patch A) |
 | `0x7f2d54` | zeros | `theme_4\0` | New translation key (Patch A) |
 
-Total code cave usage: 388 bytes out of 16,364 available. File size is unchanged.
+Total code cave usage: 388 bytes at `0x41c0b8`–`0x41c23c`. The cave begins at `0x41c0b8`, immediately after the database manager patch's return jump (`j 0x4e331c` at `0x41c0b0`) and its delay slot (`nop` at `0x41c0b4`). File size is unchanged.
+
+### Boot logo (shell script)
+
+The boot logo is displayed by `S11jpeg_display_shell` in `/etc/init.d/`. It reads `theme:N` from the same NAND location as `hiby_player` and selects the logo file. The original script only handles `theme:1` and `theme:2`. Adding two `elif` branches for `theme:3` and `theme:4` enables per-theme boot logos:
+
+```sh
+elif [ "$theme" == "theme:3" ]; then
+   cmd_jpeg_display /etc/logo3.jpeg
+elif [ "$theme" == "theme:4" ]; then
+   cmd_jpeg_display /etc/logo4.jpeg
+```
+
+Place `logo3.jpeg` and `logo4.jpeg` in `/etc/` alongside the existing logos.
 
 ## Setup
 
 1. **In `sys_set.ini`** (under `usr/resource/str/<language>/`), add display names for the new themes:
+	
    ```xml
    <theme_3>Theme Name</theme_3>
    <theme_4>Theme Name</theme_4>
    ```
 
 2. **Create litegui theme folders** with your custom resources (images, colors, config):
-
+	
    ```
    /usr/resource/litegui/theme3/
    /usr/resource/litegui/theme4/
    ```
 
 3. **Create layout theme folders** with all required layout files:
-
+	
    ```
    /usr/resource/layout/theme3/
    /usr/resource/layout/theme4/
    ```
-   Each folder must contain the same structure as `theme1/` or `theme2/`. The simplest approach is to copy an existing theme's layout folder in its entirety and customize from there.
+   Each folder must contain the same structure as `theme1/` or `theme2/` — in particular `main.json`, the `listview/` subfolder with all `.listview` files, and the `launcher/` subfolder. The simplest approach is to copy an existing theme's layout folder in its entirety and customize from there.
+
+4. **For custom boot logos**, place `logo3.jpeg` and `logo4.jpeg` in `/etc/` and update `S11jpeg_display_shell`.
 
 ## What was NOT patched (and why)
 
@@ -112,5 +128,4 @@ Total code cave usage: 388 bytes out of 16,364 available. File size is unchanged
 - **`FUN_004822c0` (NAND writer):** formats `theme:%d` with any number — no change needed.
 - **`FUN_00428d60` and related litegui path builders:** use the pointer table at `0x7ed854` which already contains entries for `theme2\\` through `theme6\\` — no change needed.
 - **Layout path builders (`FUN_0042b740`, `FUN_004bac20`, `FUN_0054cfc0`):** all use `sprintf("theme%d", index+1)` — no change needed.
->Note: The boot logo can be changed by editing the **S11jpeg_display_shell** file inside `/etc/init.d`
-How it works is pretty self explanatory, it reads the theme ID stored in NAND and then loads the corresponding jpeg file inside the `etc` folder.
+- **Launcher page layout:** loaded per-theme from `layout/themeN/launcher/hiby_launcher_apps.view` and `layout/themeN/main.json` — fully customizable without binary patches.
