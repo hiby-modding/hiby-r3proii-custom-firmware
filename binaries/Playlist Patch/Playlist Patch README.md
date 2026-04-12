@@ -1,12 +1,12 @@
-﻿# Playlist Three-Dot Menu Fix
+# Playlist Three-Dot Menu Fix
 
 ## Bug Description
 
 On the Playlist page, the three-dot menu (⋮) for each playlist was off by one:
 
-- **Playlist 1** (first m3u playlist): no three-dot icon visible
-- **Playlist 2** (second m3u playlist): three-dot icon visible, but clicking it opened the menu for **Playlist 1**
-- **Playlist 3** (third m3u playlist): three-dot icon visible, but clicking it opened the menu for **Playlist 2**
+- **Playlist 1** : no three-dot icon visible
+- **Playlist 2** : three-dot icon visible, but clicking it opened the menu for **Playlist 1**
+- **Playlist 3** : three-dot icon visible, but clicking it opened the menu for **Playlist 2**
 - And so on for every subsequent playlist
 
 The entire sub-button system: rendering, click detection, and menu targeting was shifted by one position.
@@ -38,7 +38,7 @@ Since `FUN_0042a500(5)` returns non-null (the language pointer), `a0` is always 
 
 ## Fix
 
-The fix consists of 6 patches, using a total of 145 modified bytes across the binary:
+The fix consists of 6 patches, using a total of 149 modified bytes across the binary:
 
 ### Patch A | Neutralize `FUN_0042a500` case 5 (root cause)
 
@@ -50,7 +50,7 @@ The case 5 handler in `FUN_0042a500`'s switch statement now returns NULL (0) ins
 
 ### Patch B | `get_language` code cave
 
-A 7-instruction function is placed in a zero-padded region at `0x41C0B4` that reads `DAT_009666a0[2]` directly, bypassing `FUN_0042a500`:
+A 7-instruction function is placed in a zero-padded region at `0x41C0B8` that reads `DAT_009666a0[2]` directly, bypassing `FUN_0042a500`:
 
 ```mips
 lui   v0, 0x0096          # load high half of DAT_009666a0 address
@@ -100,12 +100,13 @@ All offsets are relative to the start of the ELF file (file offsets). The ELF ba
 ```
 File offset  VA          Original bytes   Patched bytes    Description
 ─────────────────────────────────────────────────────────────────────────
-0x01C0B4     0x0041C0B4  00 00 00 00 ...  (28 bytes)       get_language code cave
+0x01C0B4     0x0041C0B4  (must be nop)    00 00 00 00      DB Manager delay slot guard
+0x01C0B8     0x0041C0B8  00 00 00 00 ...  (28 bytes)       get_language code cave
 0x02A9B8     0x0042A9B8  08 00 42 8C      25 10 00 00      case 5 → return NULL
 0x0B3144     0x004B3144  04 00 04 24      03 00 04 24      click handler: 4→3
 0x0B32C4     0x004B32C4  04 00 05 24      03 00 05 24      click gate: 4→3
 0x0B92DC     0x004B92DC  04 00 04 24      03 00 04 24      rendering: 4→3
-+ 31 call sites redirected from jal 0x42A500 to jal 0x41C0B4
++ 31 call sites redirected from jal 0x42A500 to jal 0x41C0B8
 ```
 
 ## Testing Checklist
@@ -116,3 +117,5 @@ File offset  VA          Original bytes   Patched bytes    Description
 - [x] Language radio button indicator shows the correct selection
 - [x] Playlist Create / Save / Load buttons work normally
 - [x] No three-dot icon on the fixed items (Create, Save, Load)
+- [ ] Database Manager: "Copy DB to SD" works correctly
+- [ ] Database Manager: "Copy DB from SD" works correctly
