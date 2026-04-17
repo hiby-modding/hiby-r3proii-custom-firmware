@@ -229,19 +229,67 @@ def _load_folder_art(directory: str) -> bytes | None:
 
 
 def _get_embedded_art(filepath: str, ext: str) -> bytes | None:
-    """Extract existing embedded cover art bytes from a FLAC or MP3 file."""
+    """Extract existing embedded cover art bytes from an audio file."""
     try:
         if ext == ".flac":
             from mutagen.flac import FLAC
             audio = FLAC(filepath)
             if audio.pictures:
                 return audio.pictures[0].data
-        elif ext == ".mp3":
+
+        elif ext in (".mp3", ".wav", ".aif"):
             from mutagen.id3 import ID3
             tags = ID3(filepath)
             for tag in tags.values():
                 if tag.FrameID == "APIC":
                     return tag.data
+
+        elif ext in (".m4a", ".m4b", ".aac"):
+            from mutagen.mp4 import MP4
+            audio = MP4(filepath)
+            covr = audio.tags.get("covr")
+            if covr:
+                return bytes(covr[0])
+
+        elif ext in (".ogg", ".oga", ".opus"):
+            import base64
+            audio = File(filepath)
+            if audio and hasattr(audio, "tags") and audio.tags:
+                pics = audio.tags.get("metadata_block_picture")
+                if pics:
+                    from mutagen.flac import Picture
+                    pic = Picture(base64.b64decode(pics[0]))
+                    return pic.data
+
+        elif ext == ".dsf":
+            from mutagen.id3 import ID3
+            from mutagen.dsf import DSF
+            audio = DSF(filepath)
+            if audio.tags:
+                for tag in audio.tags.values():
+                    if hasattr(tag, "FrameID") and tag.FrameID == "APIC":
+                        return tag.data
+
+        elif ext == ".wma":
+            from mutagen.asf import ASF
+            audio = ASF(filepath)
+            if audio.tags:
+                pics = audio.tags.get("WM/Picture")
+                if pics:
+                    return pics[0].value
+
+        elif ext == ".ape":
+            from mutagen.apev2 import APEv2
+            tags = APEv2(filepath)
+            for key in ("Cover Art (Front)", "Cover Art (front)"):
+                if key in tags:
+                    data = tags[key].value
+                    # APEv2 cover art: null-terminated filename + image data
+                    if isinstance(data, bytes):
+                        nul_pos = data.find(b"\x00")
+                        if nul_pos >= 0:
+                            return data[nul_pos + 1:]
+                        return data
     except Exception:
         pass
     return None
@@ -293,13 +341,115 @@ def _embed_mp3(filepath: str, art_bytes: bytes) -> bool:
         return False
 
 
+def _embed_mp4(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.mp4 import MP4, MP4Cover
+        audio = MP4(filepath)
+        if audio.tags is None:
+            audio.add_tags()
+        audio.tags["covr"] = [MP4Cover(art_bytes, imageformat=MP4Cover.FORMAT_JPEG)]
+        audio.save()
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_vorbis(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        import base64
+        from mutagen.flac import Picture
+        audio = File(filepath)
+        if audio is None:
+            return False
+        if audio.tags is None:
+            audio.add_tags()
+        pic = Picture()
+        pic.type = 3
+        pic.mime = "image/jpeg"
+        pic.data = art_bytes
+        img = _PILImage.open(io.BytesIO(art_bytes))
+        pic.width, pic.height = img.size
+        pic.depth = 24
+        audio.tags["metadata_block_picture"] = [base64.b64encode(pic.write()).decode("ascii")]
+        audio.save()
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_id3(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.id3 import ID3, APIC
+        from mutagen.id3 import error as ID3Error
+        try:
+            tags = ID3(filepath)
+        except ID3Error:
+            audio = File(filepath)
+            if audio is None:
+                return False
+            audio.add_tags()
+            tags = audio.tags
+        tags.delall("APIC")
+        tags.add(APIC(
+            encoding=3,
+            mime="image/jpeg",
+            type=3,
+            desc="Cover",
+            data=art_bytes,
+        ))
+        tags.save(filepath)
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_wma(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.asf import ASF, ASFByteArrayAttribute
+        audio = ASF(filepath)
+        if audio.tags is None:
+            audio.add_tags()
+        # WM/Picture structure: type(1) + size(4) + mime + desc + data
+        import struct
+        mime = "image/jpeg".encode("utf-16-le") + b"\x00\x00"
+        desc = "Cover".encode("utf-16-le") + b"\x00\x00"
+        header = struct.pack("<BI", 3, len(art_bytes)) + mime + desc
+        audio.tags["WM/Picture"] = [ASFByteArrayAttribute(header + art_bytes)]
+        audio.save()
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_ape(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.apev2 import APEv2, APEBinaryValue
+        try:
+            tags = APEv2(filepath)
+        except Exception:
+            tags = APEv2()
+        # APEv2 cover: null-terminated filename + image data
+        tags["Cover Art (Front)"] = APEBinaryValue(b"cover.jpg\x00" + art_bytes)
+        tags.save(filepath)
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+_EMBED_SUPPORTED_EXT = {
+    ".flac", ".mp3", ".m4a", ".m4b", ".aac",
+    ".ogg", ".oga", ".opus",
+    ".wav", ".aif", ".dsf",
+    ".wma", ".ape",
+}
+
 def embed_art(filepath: str, ext: str, directory: str) -> bool:
-    """
-    Embed 360x360 cover art into a FLAC or MP3 file.
-    Priority: folder image > existing embedded art.
-    Returns True if art was embedded successfully.
-    """
-    if not _PIL_AVAILABLE or ext not in (".flac", ".mp3"):
+    if not _PIL_AVAILABLE or ext not in _EMBED_SUPPORTED_EXT:
         return False
 
     # Use cached resized art per directory if available
@@ -324,7 +474,83 @@ def embed_art(filepath: str, ext: str, directory: str) -> bool:
         return _embed_flac(filepath, art_bytes)
     elif ext == ".mp3":
         return _embed_mp3(filepath, art_bytes)
+    elif ext in (".m4a", ".m4b", ".aac"):
+        return _embed_mp4(filepath, art_bytes)
+    elif ext in (".ogg", ".oga", ".opus"):
+        return _embed_vorbis(filepath, art_bytes)
+    elif ext in (".wav", ".aif", ".dsf"):
+        return _embed_id3(filepath, art_bytes)
+    elif ext == ".wma":
+        return _embed_wma(filepath, art_bytes)
+    elif ext == ".ape":
+        return _embed_ape(filepath, art_bytes)
     return False
+
+
+_cover_resize_cache: set = set()
+_cover_resize_count: int = 0
+_cover_resize_failures: list = []
+
+
+def resize_folder_covers(sd: str):
+    global _cover_resize_count
+    if not _PIL_AVAILABLE:
+        return
+    _cover_resize_cache.clear()
+    _cover_resize_count = 0
+    _cover_resize_failures.clear()
+
+    t_start = time.time()
+    print("Resizing folder cover images...")
+    processed = 0
+
+    for root, dirs, files in os.walk(sd):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        if root in _cover_resize_cache:
+            continue
+        _cover_resize_cache.add(root)
+
+        try:
+            entries = {f.lower(): f for f in os.listdir(root)}
+        except OSError:
+            continue
+
+        for name in COVER_NAMES:
+            if name in entries:
+                cover_path = os.path.join(root, entries[name])
+                try:
+                    with open(cover_path, "rb") as f:
+                        raw = f.read()
+                    img = _PILImage.open(io.BytesIO(raw))
+                    if img.size == ART_TARGET_SIZE:
+                        break  # Already the right size
+                    resized = _resize_to_jpeg(raw)
+                    # Determine output format based on original extension
+                    orig_ext = os.path.splitext(entries[name])[1].lower()
+                    if orig_ext == ".png":
+                        # Convert to JPEG, save with .jpg extension
+                        new_path = os.path.splitext(cover_path)[0] + ".jpg"
+                        with open(new_path, "wb") as f:
+                            f.write(resized)
+                        if new_path != cover_path:
+                            os.remove(cover_path)
+                    else:
+                        with open(cover_path, "wb") as f:
+                            f.write(resized)
+                    _cover_resize_count += 1
+                    processed += 1
+                    if processed % 100 == 0:
+                        print(f"  {processed} covers resized  [{time.time()-t_start:.0f}s]")
+                except Exception as e:
+                    _cover_resize_failures.append((cover_path, str(e)))
+                break  # Only process first matching cover per directory
+
+    print(f"  {_cover_resize_count} cover images resized  [{time.time()-t_start:.1f}s]")
+    if _cover_resize_failures:
+        print(yellow(f"\n  WARNING: Cover resize failed for {len(_cover_resize_failures)} file(s):"))
+        for path, err in _cover_resize_failures:
+            print(yellow(f"    {path}: {err}"))
+        print()
 
 
 # ── SD card detection ─────────────────────────────────────────────────────────
@@ -615,7 +841,7 @@ def scan(sd: str):
 
 # ── Database rebuild ──────────────────────────────────────────────────────────
 
-def rebuild_db(sd: str, embed_art_enabled: bool = True):
+def rebuild_db(sd: str, embed_art_enabled: bool = True, resize_covers_enabled: bool = False):
     _cover_cache.clear()
     _art_embed_cache.clear()
     _art_embed_failures.clear()
@@ -629,6 +855,11 @@ def rebuild_db(sd: str, embed_art_enabled: bool = True):
     cur.execute("PRAGMA temp_store = MEMORY")
 
     t0 = time.time()
+
+    # ── Folder cover resize pass ─────────────────────────────────────────────
+    if resize_covers_enabled and _PIL_AVAILABLE:
+        resize_folder_covers(sd)
+
     print("Scanning SD card...")
     audio, playlists = scan(sd)
     print(f"  {len(audio)} audio files, {len(playlists)} playlists  [{time.time()-t0:.1f}s]")
@@ -641,7 +872,7 @@ def rebuild_db(sd: str, embed_art_enabled: bool = True):
             print("Embedding album art (360×360)...")
             for i, file in enumerate(audio):
                 ext = os.path.splitext(file)[1].lower()
-                if ext in (".flac", ".mp3"):
+                if ext in _EMBED_SUPPORTED_EXT:
                     if i % 200 == 0 and i > 0:
                         print(f"  {i}/{len(audio)}  [{time.time()-t_art:.0f}s]")
                     if embed_art(file, ext, os.path.dirname(file)):
@@ -880,6 +1111,8 @@ def rebuild_db(sd: str, embed_art_enabled: bool = True):
     print(green(f"  Playlists:     {len(playlists)}"))
     if embed_art_enabled and _PIL_AVAILABLE:
         print(green(f"  Art embedded:  {art_embedded} files"))
+    if resize_covers_enabled and _PIL_AVAILABLE:
+        print(green(f"  Covers resized: {_cover_resize_count} files"))
     print(green("=" * 50))
 
 
@@ -899,14 +1132,17 @@ def main():
 
     # Prompt for art embedding
     embed = True
+    resize = False
     if _PIL_AVAILABLE:
         ans = input("\nEmbed and resize album art to 360×360? [Y/n]: ").strip().lower()
         embed = ans not in ("n", "no")
+        ans2 = input("Resize folder cover images (cover.jpg, folder.jpg, etc.) to 360×360? [y/N]: ").strip().lower()
+        resize = ans2 in ("y", "yes")
     else:
-        print(yellow("Note: Pillow not installed — album art embedding disabled."))
+        print(yellow("Note: Pillow not installed — album art embedding/resizing disabled."))
         print(yellow("      Run: pip install Pillow"))
 
-    rebuild_db(sd, embed_art_enabled=embed)
+    rebuild_db(sd, embed_art_enabled=embed, resize_covers_enabled=resize)
 
 
 if __name__ == "__main__":

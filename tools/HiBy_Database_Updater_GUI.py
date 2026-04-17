@@ -179,12 +179,58 @@ def _get_embedded_art(filepath: str, ext: str) -> bytes | None:
             audio = FLAC(filepath)
             if audio.pictures:
                 return audio.pictures[0].data
-        elif ext == ".mp3":
+
+        elif ext in (".mp3", ".wav", ".aif"):
             from mutagen.id3 import ID3
             tags = ID3(filepath)
             for tag in tags.values():
                 if tag.FrameID == "APIC":
                     return tag.data
+
+        elif ext in (".m4a", ".m4b", ".aac"):
+            from mutagen.mp4 import MP4
+            audio = MP4(filepath)
+            covr = audio.tags.get("covr")
+            if covr:
+                return bytes(covr[0])
+
+        elif ext in (".ogg", ".oga", ".opus"):
+            import base64
+            audio = File(filepath)
+            if audio and hasattr(audio, "tags") and audio.tags:
+                pics = audio.tags.get("metadata_block_picture")
+                if pics:
+                    from mutagen.flac import Picture
+                    pic = Picture(base64.b64decode(pics[0]))
+                    return pic.data
+
+        elif ext == ".dsf":
+            from mutagen.dsf import DSF
+            audio = DSF(filepath)
+            if audio.tags:
+                for tag in audio.tags.values():
+                    if hasattr(tag, "FrameID") and tag.FrameID == "APIC":
+                        return tag.data
+
+        elif ext == ".wma":
+            from mutagen.asf import ASF
+            audio = ASF(filepath)
+            if audio.tags:
+                pics = audio.tags.get("WM/Picture")
+                if pics:
+                    return pics[0].value
+
+        elif ext == ".ape":
+            from mutagen.apev2 import APEv2
+            tags = APEv2(filepath)
+            for key in ("Cover Art (Front)", "Cover Art (front)"):
+                if key in tags:
+                    data = tags[key].value
+                    if isinstance(data, bytes):
+                        nul_pos = data.find(b"\x00")
+                        if nul_pos >= 0:
+                            return data[nul_pos + 1:]
+                        return data
     except Exception:
         pass
     return None
@@ -236,8 +282,113 @@ def _embed_mp3(filepath: str, art_bytes: bytes) -> bool:
         return False
 
 
+def _embed_mp4(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.mp4 import MP4, MP4Cover
+        audio = MP4(filepath)
+        if audio.tags is None:
+            audio.add_tags()
+        audio.tags["covr"] = [MP4Cover(art_bytes, imageformat=MP4Cover.FORMAT_JPEG)]
+        audio.save()
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_vorbis(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        import base64
+        from mutagen.flac import Picture
+        audio = File(filepath)
+        if audio is None:
+            return False
+        if audio.tags is None:
+            audio.add_tags()
+        pic = Picture()
+        pic.type = 3
+        pic.mime = "image/jpeg"
+        pic.data = art_bytes
+        img = _PILImage.open(io.BytesIO(art_bytes))
+        pic.width, pic.height = img.size
+        pic.depth = 24
+        audio.tags["metadata_block_picture"] = [base64.b64encode(pic.write()).decode("ascii")]
+        audio.save()
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_id3(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.id3 import ID3, APIC
+        from mutagen.id3 import error as ID3Error
+        try:
+            tags = ID3(filepath)
+        except ID3Error:
+            audio = File(filepath)
+            if audio is None:
+                return False
+            audio.add_tags()
+            tags = audio.tags
+        tags.delall("APIC")
+        tags.add(APIC(
+            encoding=3,
+            mime="image/jpeg",
+            type=3,
+            desc="Cover",
+            data=art_bytes,
+        ))
+        tags.save(filepath)
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_wma(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.asf import ASF, ASFByteArrayAttribute
+        import struct
+        audio = ASF(filepath)
+        if audio.tags is None:
+            audio.add_tags()
+        mime = "image/jpeg".encode("utf-16-le") + b"\x00\x00"
+        desc = "Cover".encode("utf-16-le") + b"\x00\x00"
+        header = struct.pack("<BI", 3, len(art_bytes)) + mime + desc
+        audio.tags["WM/Picture"] = [ASFByteArrayAttribute(header + art_bytes)]
+        audio.save()
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+def _embed_ape(filepath: str, art_bytes: bytes) -> bool:
+    try:
+        from mutagen.apev2 import APEv2, APEBinaryValue
+        try:
+            tags = APEv2(filepath)
+        except Exception:
+            tags = APEv2()
+        tags["Cover Art (Front)"] = APEBinaryValue(b"cover.jpg\x00" + art_bytes)
+        tags.save(filepath)
+        return True
+    except Exception as e:
+        _art_embed_failures.append((filepath, str(e)))
+        return False
+
+
+_EMBED_SUPPORTED_EXT = {
+    ".flac", ".mp3", ".m4a", ".m4b", ".aac",
+    ".ogg", ".oga", ".opus",
+    ".wav", ".aif", ".dsf",
+    ".wma", ".ape",
+}
+
 def embed_art(filepath: str, ext: str, directory: str) -> bool:
-    if not _PIL_AVAILABLE or ext not in (".flac", ".mp3"):
+    if not _PIL_AVAILABLE or ext not in _EMBED_SUPPORTED_EXT:
         return False
     if directory not in _art_embed_cache:
         raw = _load_folder_art(directory)
@@ -258,7 +409,75 @@ def embed_art(filepath: str, ext: str, directory: str) -> bool:
         return _embed_flac(filepath, art_bytes)
     elif ext == ".mp3":
         return _embed_mp3(filepath, art_bytes)
+    elif ext in (".m4a", ".m4b", ".aac"):
+        return _embed_mp4(filepath, art_bytes)
+    elif ext in (".ogg", ".oga", ".opus"):
+        return _embed_vorbis(filepath, art_bytes)
+    elif ext in (".wav", ".aif", ".dsf"):
+        return _embed_id3(filepath, art_bytes)
+    elif ext == ".wma":
+        return _embed_wma(filepath, art_bytes)
+    elif ext == ".ape":
+        return _embed_ape(filepath, art_bytes)
     return False
+
+
+_cover_resize_cache: set = set()
+_cover_resize_count: int = 0
+_cover_resize_failures: list = []
+
+
+def resize_folder_covers(sd: str, on_status=None):
+    global _cover_resize_count
+    if not _PIL_AVAILABLE:
+        return
+    _cover_resize_cache.clear()
+    _cover_resize_count = 0
+    _cover_resize_failures.clear()
+
+    if on_status: on_status("Resizing folder cover images...")
+    processed = 0
+
+    for root, dirs, files in os.walk(sd):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        if root in _cover_resize_cache:
+            continue
+        _cover_resize_cache.add(root)
+
+        try:
+            entries = {f.lower(): f for f in os.listdir(root)}
+        except OSError:
+            continue
+
+        for name in COVER_NAMES:
+            if name in entries:
+                cover_path = os.path.join(root, entries[name])
+                try:
+                    with open(cover_path, "rb") as f:
+                        raw = f.read()
+                    img = _PILImage.open(io.BytesIO(raw))
+                    if img.size == ART_TARGET_SIZE:
+                        break
+                    resized = _resize_to_jpeg(raw)
+                    orig_ext = os.path.splitext(entries[name])[1].lower()
+                    if orig_ext == ".png":
+                        new_path = os.path.splitext(cover_path)[0] + ".jpg"
+                        with open(new_path, "wb") as f:
+                            f.write(resized)
+                        if new_path != cover_path:
+                            os.remove(cover_path)
+                    else:
+                        with open(cover_path, "wb") as f:
+                            f.write(resized)
+                    _cover_resize_count += 1
+                    processed += 1
+                    if on_status and processed % 50 == 0:
+                        on_status(f"Resized {processed} cover images...")
+                except Exception as e:
+                    _cover_resize_failures.append((cover_path, str(e)))
+                break
+
+    if on_status: on_status(f"Resized {_cover_resize_count} cover images")
 
 
 # ── Volume detection ──────────────────────────────────────────────────────────
@@ -458,7 +677,7 @@ def scan_files(sd):
 
 # ── Database rebuild (with progress callback) ─────────────────────────────────
 
-def rebuild_db(sd, embed_art_enabled=True, on_progress=None, on_status=None):
+def rebuild_db(sd, embed_art_enabled=True, resize_covers_enabled=False, on_progress=None, on_status=None):
     _cover_cache.clear()
     _art_embed_cache.clear()
     _art_embed_failures.clear()
@@ -472,6 +691,11 @@ def rebuild_db(sd, embed_art_enabled=True, on_progress=None, on_status=None):
     cur.execute("PRAGMA temp_store = MEMORY")
 
     t0 = time.time()
+
+    # ── Folder cover resize pass ─────────────────────────────────────────────
+    if resize_covers_enabled and _PIL_AVAILABLE:
+        resize_folder_covers(sd, on_status=on_status)
+
     if on_status: on_status("Scanning SD card...")
     audio, playlists = scan_files(sd)
     if on_status: on_status(f"Found {len(audio)} audio files, {len(playlists)} playlists")
@@ -482,7 +706,7 @@ def rebuild_db(sd, embed_art_enabled=True, on_progress=None, on_status=None):
         if on_status: on_status("Embedding album art (360×360)...")
         for i, file in enumerate(audio):
             ext = os.path.splitext(file)[1].lower()
-            if ext in (".flac", ".mp3"):
+            if ext in _EMBED_SUPPORTED_EXT:
                 if on_progress: on_progress(i, len(audio) * 2)  # art pass = first half
                 if embed_art(file, ext, os.path.dirname(file)):
                     art_embedded += 1
@@ -611,6 +835,8 @@ def rebuild_db(sd, embed_art_enabled=True, on_progress=None, on_status=None):
         "art_embedded": art_embedded,
         "art_failures": len(_art_embed_failures),
         "tag_failures": list(_tag_failures),
+        "covers_resized": _cover_resize_count,
+        "cover_resize_failures": len(_cover_resize_failures),
     }
 
 
@@ -620,7 +846,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("HiBy Database Updater")
-        self.geometry("540x540")
+        self.geometry("540x580")
         self.resizable(False, False)
 
         pad = ctk.CTkFrame(self, fg_color="transparent")
@@ -659,12 +885,24 @@ class App(ctk.CTk):
         art_frame.pack(fill="x", pady=(8, 2))
         self._art_checkbox = ctk.CTkCheckBox(
             art_frame,
-            text="Embed & resize album art to 360×360px (FLAC/MP3)",
+            text="Embed & resize album art to 360×360px",
             variable=self._embed_art_var,
             font=ctk.CTkFont(size=13),
             state="normal" if _PIL_AVAILABLE else "disabled",
         )
         self._art_checkbox.pack(anchor="w")
+
+        # Folder cover resize checkbox
+        self._resize_covers_var = ctk.BooleanVar(value=False)
+        self._resize_checkbox = ctk.CTkCheckBox(
+            art_frame,
+            text="Resize folder cover images (cover.jpg, etc.) to 360×360px",
+            variable=self._resize_covers_var,
+            font=ctk.CTkFont(size=13),
+            state="normal" if _PIL_AVAILABLE else "disabled",
+        )
+        self._resize_checkbox.pack(anchor="w", pady=(4, 0))
+
         if not _PIL_AVAILABLE:
             ctk.CTkLabel(art_frame,
                          text="  ⚠ Pillow not installed — run: pip install Pillow",
@@ -740,19 +978,22 @@ class App(ctk.CTk):
         self._start_btn.configure(state="disabled")
         self._combo.configure(state="disabled")
         self._art_checkbox.configure(state="disabled")
+        self._resize_checkbox.configure(state="disabled")
         self._progress.set(0)
         self._result_box.configure(state="normal")
         self._result_box.delete("0.0", "end")
         self._result_box.configure(state="disabled")
 
         embed = self._embed_art_var.get() and _PIL_AVAILABLE
-        thread = threading.Thread(target=self._worker, args=(sd_path, embed), daemon=True)
+        resize = self._resize_covers_var.get() and _PIL_AVAILABLE
+        thread = threading.Thread(target=self._worker, args=(sd_path, embed, resize), daemon=True)
         thread.start()
 
-    def _worker(self, sd_path, embed_art_enabled):
+    def _worker(self, sd_path, embed_art_enabled, resize_covers_enabled):
         try:
             result = rebuild_db(sd_path,
                                 embed_art_enabled=embed_art_enabled,
+                                resize_covers_enabled=resize_covers_enabled,
                                 on_progress=self._on_progress,
                                 on_status=self._on_status)
             self.after(0, self._on_done, result)
@@ -787,6 +1028,10 @@ class App(ctk.CTk):
             text += f"\n  Art embedded:   {result['art_embedded']} files\n"
         if result["art_failures"] > 0:
             text += f"  ⚠ Art errors:   {result['art_failures']} files\n"
+        if result["covers_resized"] > 0:
+            text += f"\n  Covers resized: {result['covers_resized']} files\n"
+        if result["cover_resize_failures"] > 0:
+            text += f"  ⚠ Resize errors: {result['cover_resize_failures']} files\n"
         if result["tag_failures"]:
             text += f"\n  ⚠ {len(result['tag_failures'])} file(s) could not be read\n"
 
@@ -798,6 +1043,7 @@ class App(ctk.CTk):
         self._start_btn.configure(state="normal")
         self._combo.configure(state="readonly")
         self._art_checkbox.configure(state="normal" if _PIL_AVAILABLE else "disabled")
+        self._resize_checkbox.configure(state="normal" if _PIL_AVAILABLE else "disabled")
 
     def _on_error(self, msg):
         self._progress.set(0)
@@ -809,6 +1055,7 @@ class App(ctk.CTk):
         self._start_btn.configure(state="normal")
         self._combo.configure(state="readonly")
         self._art_checkbox.configure(state="normal" if _PIL_AVAILABLE else "disabled")
+        self._resize_checkbox.configure(state="normal" if _PIL_AVAILABLE else "disabled")
 
     def _show_error(self, msg):
         from tkinter import messagebox

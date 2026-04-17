@@ -54,8 +54,6 @@ Art is resized using the Lanczos algorithm and saved as JPEG (quality 90) before
 
 Files for which art embed fails are counted and reported in the summary.
 
-> **Note:** Only FLAC and MP3 files are supported for embedding. Other formats are skipped.
-
 ---
 
 ## Supported Formats
