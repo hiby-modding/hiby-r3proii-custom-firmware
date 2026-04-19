@@ -10,18 +10,22 @@ This project is part of the [hiby-modding](https://github.com/hiby-modding) orga
 
 Provides custom firmware builds and tools for modifying HiBy OS on supported devices. Modifications are built on top of the stock firmware and distributed as ready-to-flash `.upt` files.
 
-**Current modifications in v1.4+:**
-- Database Manager — new Settings menu entry to save/load the music library database to/from SD card without rescanning. Supports all 13 languages.
-- PC Database Updater — Python script and GUI app to generate the music library database on your PC in seconds
-- Unified Theme — modernized UI including updated system dialogs, battery icon, WiFi/BT scanning dialogs, and more
+**Current modifications in v1.5:**
+- Database Manager — new Settings menu entry to save/load the music library database to/from SD card without rescanning. Supports all 13 languages. Shows a "Done!" popup after each operation.
+- PC Database Updater — Python script and GUI app to generate the music library database on your PC in seconds. Embeds and resizes cover art to 360×360px across all supported formats.
+- Unified Theme — modernized UI including updated system dialogs, battery icon, WiFi/BT scanning dialogs, ADB icon on About page, and more
 - Alphabetical sorting — multi-language article support, symbols sort to top, updated scrollbar
+- Playlist menu fix — three-dot context menu now works correctly on all playlists
+- Most Played playlist — tracks ordered by play count, accessible from the Playlists menu
+- Bluetooth optimization — BT init time reduced from ~11s to ~7s
 - Extended Unicode font support — adds rendering for scripts not included in the stock firmware
 - ADB support — root shell access via USB, enabled through a hidden easter egg
-- Custom firmware identifier — About page shows `1.4+` to distinguish from stock
+- Custom firmware identifier — About page shows `1.5` to distinguish from stock
 
 **Known Limitations:**
 - Added Unicode scripts display left-to-right regardless of the script's natural reading direction — the HiBy OS text renderer does not support bidirectional text
 - Characters appear in isolated forms and do not connect to each other — the OS renderer does not support contextual shaping
+- Song limit (currently 50,000 tracks) patch is under investigation — will be included in a future release
 
 ## Tested On
 
@@ -37,7 +41,7 @@ Provides custom firmware builds and tools for modifying HiBy OS on supported dev
 
 If you just want to flash the latest modifications without building from source:
 
-1. Download `r3proii-v1.4-hmod.upt` from the [Releases](https://github.com/hiby-modding/hiby-mods/releases) section
+1. Download `r3proii-v1.5-hmod.upt` from the [Releases](https://github.com/hiby-modding/hiby-mods/releases) section
 2. Verify the checksum matches the one listed in the release notes
 3. Copy it to the root of your SD card and rename it to `r3proii.upt`
 4. Insert the SD card into your HiBy R3 Pro II
@@ -55,7 +59,7 @@ If you just want to flash the latest modifications without building from source:
 Instead of waiting for the device to rescan your music library, generate the database on your PC in seconds:
 
 1. Insert your SD card into your PC
-2. Run `tools/Update_Database.py` or use the GUI app
+2. Run `tools/Update_Database.py` or use the GUI app (`tools/HiBy_Database_Updater_GUI.py`)
 3. Insert the SD card back into the device
 4. Go to **Settings → Database Manager → Copy Database from SD**
 5. The library reloads instantly — no rescan needed
@@ -65,7 +69,7 @@ Instead of waiting for the device to rescan your music library, generate the dat
 ADB can be enabled on any firmware version (including stock) without any modification:
 
 1. Go to **Settings → About**
-2. Tap the **"About"** text 10 times
+2. Tap the **"About"** text 10 times (or tap the ADB icon in the top-right corner when using the Unified Theme)
 3. A message saying "Test Mode Turned On" will appear
 4. Connect the device to your PC via USB
 5. Run `adb devices` to confirm the connection
@@ -115,27 +119,33 @@ cd hiby-mods
 hiby-mods/
 ├── README.md
 ├── binaries/
-│   ├── Sorting Patch/        # Sorting-only patched binary
-│   └── DB Manager Patch/     # Sorting + Database Manager patched binary
+│   ├── Sorting Patch/              # Sorting-only patched binary
+│   ├── DB Manager Patch/           # Sorting + Database Manager patched binary
+│   ├── Playlist Patch/             # Sorting + DB Manager + Playlist fix patched binary
+│   └── DB Manager Dialog Patch/    # Sorting + DB Manager + Playlist + Done dialog patched binary
 ├── docs/
-│   ├── FIRMWARE_FORMAT.md    # Detailed OTA format documentation
-│   └── SCREENSHOTS.md        # ADB screenshot guide
+│   ├── FIRMWARE_FORMAT.md          # Detailed OTA format documentation
+│   ├── SCREENSHOTS.md              # ADB screenshot guide
+│   ├── ALBUM_ART.md                # Album art guide
+│   └── FACTORY_MODE.md             # Factory diagnostic mode documentation
 ├── themes/
-│   └── Unified Theme/        # Community UI theme (3 variants)
+│   └── Unified Theme/              # Community UI theme (3 variants)
 ├── tools/
-│   ├── build_upt.sh          # Manual build script
-│   ├── merge_arabic_font.py  # Font merging utility
-│   ├── universal_mod_tool.sh # Interactive mod tool
-│   ├── MOD_TOOL.md           # Mod tool documentation
-│   ├── rebuild.sh            # Quick rebuild script
-│   ├── Update_Database.py    # PC database updater script
+│   ├── build_upt.sh                # Manual build script
+│   ├── merge_arabic_font.py        # Font merging utility
+│   ├── universal_mod_tool.sh       # Interactive mod tool
+│   ├── MOD_TOOL.md                 # Mod tool documentation
+│   ├── rebuild.sh                  # Quick rebuild script
+│   ├── bt_init_optimized           # Optimized Bluetooth init script
+│   ├── Update_Database.py          # PC database updater script
+│   ├── HiBy_Database_Updater_GUI.py # GUI database updater
 │   └── Update Database README.md
 └── firmware/
-    ├── r3proii-arabic.upt    # v1.0
-    ├── r3proii-v1.1.upt      # v1.1
-    ├── r3proii-v1.2.upt      # v1.2
-    ├── r3proii-v1.3.upt      # v1.3
-    └── r3proii-v1.4-hmod.upt # v1.4+ (latest)
+    ├── r3proii-arabic.upt          # v1.0
+    ├── r3proii-v1.1.upt            # v1.1
+    ├── r3proii-v1.2.upt            # v1.2
+    ├── r3proii-v1.3.upt            # v1.3
+    └── r3proii-v1.4-hmod.upt       # v1.4+
 ```
 
 ## Documentation
@@ -144,7 +154,20 @@ See [docs/FIRMWARE_FORMAT.md](docs/FIRMWARE_FORMAT.md) for complete documentatio
 
 See [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) for a guide on capturing screenshots from the device via ADB.
 
+See [docs/FACTORY_MODE.md](docs/FACTORY_MODE.md) for documentation of the built-in factory diagnostic mode.
+
 ## Changelog
+
+### v1.5
+- Playlist menu fix — three-dot context menu now appears on all playlists and targets the correct entry
+- DB Manager "Done!" popup — visual confirmation after Save/Copy operations
+- Most Played playlist — new playlist showing tracks ordered by play count
+- Bluetooth optimization — BT init reduced from ~11s to ~7s
+- PC Database Updater — album art embed/resize to 360×360px for all supported formats, folder cover resize, GUI app added
+- Unified Theme — ADB icon on About page, updated prompts, balance icon, Wi-Fi icon fix, create playlist page fix, battery icon update
+- Spanish buffer overflow crash fixed
+- All 13 language files updated with DB Manager and Most Played strings
+- Factory diagnostic mode documented
 
 ### v1.4+
 - Database Manager — load/save music library database via Settings menu, all 13 languages supported
@@ -184,11 +207,13 @@ Contributions are welcome. Areas where help would be valuable:
 - GUI and theme modifications
 - RockBox Bluetooth/WiFi integration
 - Further ADB exploration and live system research
+- Song limit investigation and binary patch
 
 ## Acknowledgements
 
-- [@Jepl4r](https://github.com/Jepl4r) — Unified Theme, sorting patch, Database Manager, PC database updater, mod tool
-- [@Tartarus6](https://github.com/Tartarus6) — hiby_os_crack tooling and collaboration
+- [@Jepl4r](https://github.com/Jepl4r) — Unified Theme, sorting patch, Database Manager, playlist fix, Done dialog, PC database updater, mod tool
+- [@Tartarus6](https://github.com/Tartarus6) — hiby_os_crack tooling, binary decompilation and collaboration
+- [@greenturtle537](https://github.com/greenturtle537) — QEMU board support research
 - Noto Naskh Arabic font by Google (OFL licensed)
 - HiBy Music for making a great device
 - The [head-fi.org](https://head-fi.org) community
